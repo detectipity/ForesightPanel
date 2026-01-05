@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <title>FORΞSIGHT PΛNΞL - MOBILE OPTIMIZED</title>
+    <title>FORΞSIGHT PΛNΞL</title>
     <link
       href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap"
       rel="stylesheet"
@@ -152,6 +152,7 @@
           this.depth = depth;
           this.panels = new Array(depth).fill("normal");
           this.shake = 0;
+          this.flash = 0;
         }
         pull() {
           this.panels.shift();
@@ -180,11 +181,14 @@
       const offsetX = (canvas.width - (3 * pSize + 2 * pSpace)) / 2;
       const offsetY = (canvas.height - (3 * pSize + 2 * pSpace)) / 2;
 
+      let lastTargetIdx = -1;
+
       function startGame(mode) {
         currentMode = mode;
         floor = -depth;
         timeLeft = 100;
         pillars = [];
+        lastTargetIdx = -1;
         for (let i = 0; i < 9; i++)
           pillars.push(new Pillar(i % 3, Math.floor(i / 3), depth));
         for (let i = 0; i < depth; i++) setupInitialFloor(i);
@@ -204,17 +208,28 @@
       }
 
       function injectTarget(foresight) {
+        // 候補の抽出条件に「前回の位置（lastTargetIdx）ではないこと」を追加
         let candidates = pillars
           .map((_, i) => i)
           .filter(
             (i) =>
+              i !== lastTargetIdx && // 【追加】前回の柱を除外
               pillars[i].panels[depth - foresight] === "normal" &&
               pillars[i].panels[depth - 1] === "normal"
           );
-        if (candidates.length === 0)
-          candidates = [Math.floor(Math.random() * 9)];
+
+        // もし候補が空になった場合のセーフティ
+        if (candidates.length === 0) {
+          candidates = pillars
+            .map((_, i) => i)
+            .filter((i) => i !== lastTargetIdx);
+        }
+
         const targetIdx =
           candidates[Math.floor(Math.random() * candidates.length)];
+
+        // 今回選んだインデックスを保存
+        lastTargetIdx = targetIdx;
 
         pillars.forEach((p, i) => {
           if (i === targetIdx) p.setPanel(foresight);
@@ -287,10 +302,11 @@
             py = offsetY + p.y * (pSize + pSpace);
           if (mx > px && mx < px + pSize && my > py && my < py + pSize) {
             if (p.panels[0] === "target" || p.panels[0].startsWith("fake")) {
+              p.flash = 1.0;
               injectTarget(getNextForesight());
               updateHUD();
             } else {
-              p.shake = 10;
+              p.shake = 20;
               timeLeft -= 12;
               if (timeLeft <= 0) gameOver("CRITICAL ERROR");
             }
@@ -312,7 +328,7 @@
             (Math.random() * p.shake - p.shake / 2);
           const py = offsetY + p.y * (pSize + pSpace);
           if (p.shake > 0) p.shake *= 0.8;
-          let color = "#0a0a0a",
+          let color = "#112211",
             label = "",
             glow = false;
           const current = p.panels[0];
@@ -344,7 +360,7 @@
           ctx.arcTo(-pSize / 2, -pSize / 2, pSize / 2, -pSize / 2, r);
           ctx.closePath();
           ctx.fill();
-          ctx.strokeStyle = glow ? "#fff" : "#222";
+          ctx.strokeStyle = glow ? "#fff" : "#353";
           ctx.lineWidth = 1;
           ctx.stroke();
           if (label) {
@@ -361,6 +377,12 @@
             ctx.moveTo(-20, 28);
             ctx.lineTo(20, 28);
             ctx.stroke();
+          }
+          if (p.flash > 0) {
+            ctx.fillStyle = "#fff";
+            ctx.globalAlpha = p.flash;
+            ctx.fill();
+            p.flash *= 0.85;
           }
           ctx.restore();
         });
